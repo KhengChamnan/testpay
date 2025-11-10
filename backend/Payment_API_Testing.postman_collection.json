@@ -1,0 +1,417 @@
+{
+	"info": {
+		"_postman_id": "payment-api-test-collection",
+		"name": "Payment API Testing",
+		"description": "Complete collection for testing ABA PayWay payment integration",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Create Payment",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Save tran_id for next requests",
+							"var response = pm.response.json();",
+							"if (response.success && response.data && response.data.tran_id) {",
+							"    pm.environment.set(\"tran_id\", response.data.tran_id);",
+							"    console.log(\"Transaction ID saved: \" + response.data.tran_id);",
+							"}",
+							"",
+							"// Test assertions",
+							"pm.test(\"Status code is 201\", function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test(\"Response has success field\", function () {",
+							"    pm.expect(response).to.have.property('success');",
+							"    pm.expect(response.success).to.be.true;",
+							"});",
+							"",
+							"pm.test(\"Response has transaction ID\", function () {",
+							"    pm.expect(response.data).to.have.property('tran_id');",
+							"});",
+							"",
+							"pm.test(\"Payment status is pending\", function () {",
+							"    pm.expect(response.data.payment_status).to.equal('pending');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"amount\": 5.00,\n    \"currency\": \"USD\",\n    \"payment_option\": \"abapay_khqr_deeplink\",\n    \"firstname\": \"John\",\n    \"lastname\": \"Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"phone\": \"012345678\",\n    \"return_deeplink\": \"myapp://payment\",\n    \"booking_id\": 123\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/payment/create",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"payment",
+						"create"
+					]
+				},
+				"description": "Creates a new payment request and returns QR code and deeplink for payment"
+			},
+			"response": []
+		},
+		{
+			"name": "2. Check Payment Status (Pending)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var response = pm.response.json();",
+							"",
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Payment found\", function () {",
+							"    pm.expect(response.success).to.be.true;",
+							"});",
+							"",
+							"pm.test(\"Has payment data\", function () {",
+							"    pm.expect(response.data).to.have.property('tran_id');",
+							"    pm.expect(response.data).to.have.property('payment_status');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/payment/status?tran_id={{tran_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"payment",
+						"status"
+					],
+					"query": [
+						{
+							"key": "tran_id",
+							"value": "{{tran_id}}",
+							"description": "Transaction ID from Create Payment"
+						}
+					]
+				},
+				"description": "Check the status of a payment. Should show 'pending' before callback."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Simulate ABA Success Callback",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var response = pm.response.json();",
+							"",
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Callback processed successfully\", function () {",
+							"    pm.expect(response.success).to.be.true;",
+							"    pm.expect(response.message).to.include('successfully');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json"
+					},
+					{
+						"key": "x-payway-topic",
+						"value": "PaymentNotification",
+						"description": "ABA PayWay header"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"tran_id\": \"{{tran_id}}\",\n    \"apv\": \"913082\",\n    \"status\": 0,\n    \"amount\": \"5.00\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/payway/return",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"payway",
+						"return"
+					]
+				},
+				"description": "Simulates ABA PayWay success callback. Status 0 = success, other values = failed."
+			},
+			"response": []
+		},
+		{
+			"name": "4. Check Payment Status (Paid)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var response = pm.response.json();",
+							"",
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Payment status is paid\", function () {",
+							"    pm.expect(response.data.payment_status).to.equal('paid');",
+							"});",
+							"",
+							"pm.test(\"Has paid_at timestamp\", function () {",
+							"    pm.expect(response.data.paid_at).to.not.be.null;",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/payment/status?tran_id={{tran_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"payment",
+						"status"
+					],
+					"query": [
+						{
+							"key": "tran_id",
+							"value": "{{tran_id}}"
+						}
+					]
+				},
+				"description": "Check payment status after callback. Should now show 'paid'."
+			},
+			"response": []
+		},
+		{
+			"name": "5. Simulate ABA Failed Callback",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var response = pm.response.json();",
+							"",
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Callback processed\", function () {",
+							"    pm.expect(response).to.have.property('success');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"tran_id\": \"{{tran_id}}\",\n    \"status\": 1,\n    \"amount\": \"5.00\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/payway/return",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"payway",
+						"return"
+					]
+				},
+				"description": "Simulates a failed payment callback (status != 0)"
+			},
+			"response": []
+		},
+		{
+			"name": "6. Simulate Cancel Callback",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"tran_id\": \"{{tran_id}}\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/payway/cancel",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"payway",
+						"cancel"
+					]
+				},
+				"description": "Simulates payment cancellation"
+			},
+			"response": []
+		},
+		{
+			"name": "7. Create Payment with Items",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var response = pm.response.json();",
+							"if (response.success && response.data && response.data.tran_id) {",
+							"    pm.environment.set(\"tran_id\", response.data.tran_id);",
+							"}",
+							"",
+							"pm.test(\"Status code is 201\", function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test(\"Payment created successfully\", function () {",
+							"    pm.expect(response.success).to.be.true;",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"amount\": 15.50,\n    \"currency\": \"USD\",\n    \"payment_option\": \"abapay_khqr_deeplink\",\n    \"firstname\": \"Jane\",\n    \"lastname\": \"Smith\",\n    \"email\": \"jane.smith@example.com\",\n    \"phone\": \"098765432\",\n    \"items\": [\n        {\n            \"name\": \"Product A\",\n            \"quantity\": 2,\n            \"price\": 5.00\n        },\n        {\n            \"name\": \"Product B\",\n            \"quantity\": 1,\n            \"price\": 5.50\n        }\n    ]\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/payment/create",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"payment",
+						"create"
+					]
+				},
+				"description": "Creates payment with multiple items"
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://elegant-many-oyster.ngrok-free.app",
+			"type": "string"
+		},
+		{
+			"key": "tran_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
